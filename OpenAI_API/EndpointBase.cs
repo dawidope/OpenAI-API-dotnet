@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using OpenAI_API.Chat;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -7,6 +8,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Security.Authentication;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAI_API
@@ -94,16 +96,17 @@ namespace OpenAI_API
 		}
 
 
-		/// <summary>
-		/// Sends an HTTP request and returns the response.  Does not do any parsing, but does do error handling.
-		/// </summary>
-		/// <param name="url">(optional) If provided, overrides the url endpoint for this request.  If omitted, then <see cref="Url"/> will be used.</param>
-		/// <param name="verb">(optional) The HTTP verb to use, for example "<see cref="HttpMethod.Get"/>".  If omitted, then "GET" is assumed.</param>
-		/// <param name="postData">(optional) A json-serializable object to include in the request body.</param>
-		/// <param name="streaming">(optional) If true, streams the response.  Otherwise waits for the entire response before returning.</param>
-		/// <returns>The HttpResponseMessage of the response, which is confirmed to be successful.</returns>
-		/// <exception cref="HttpRequestException">Throws an exception if a non-success HTTP response was returned</exception>
-		private async Task<HttpResponseMessage> HttpRequestRaw(string url = null, HttpMethod verb = null, object postData = null, bool streaming = false)
+    /// <summary>
+    /// Sends an HTTP request and returns the response.  Does not do any parsing, but does do error handling.
+    /// </summary>
+    /// <param name="url">(optional) If provided, overrides the url endpoint for this request.  If omitted, then <see cref="Url"/> will be used.</param>
+    /// <param name="verb">(optional) The HTTP verb to use, for example "<see cref="HttpMethod.Get"/>".  If omitted, then "GET" is assumed.</param>
+    /// <param name="postData">(optional) A json-serializable object to include in the request body.</param>
+    /// <param name="streaming">(optional) If true, streams the response.  Otherwise waits for the entire response before returning.</param>
+    /// <param name="cancellationToken"></param>
+    /// <returns>The HttpResponseMessage of the response, which is confirmed to be successful.</returns>
+    /// <exception cref="HttpRequestException">Throws an exception if a non-success HTTP response was returned</exception>
+    private async Task<HttpResponseMessage> HttpRequestRaw(string url = null, HttpMethod verb = null, object postData = null, bool streaming = false, CancellationToken cancellationToken = default)
 		{
 			if (string.IsNullOrEmpty(url))
 				url = this.Url;
@@ -130,7 +133,7 @@ namespace OpenAI_API
 					req.Content = stringContent;
 				}
 			}
-			response = await client.SendAsync(req, streaming ? HttpCompletionOption.ResponseHeadersRead : HttpCompletionOption.ResponseContentRead);
+			response = await client.SendAsync(req, streaming ? HttpCompletionOption.ResponseHeadersRead : HttpCompletionOption.ResponseContentRead, cancellationToken);
 
 			if (response.IsSuccessStatusCode)
 			{
@@ -222,12 +225,12 @@ namespace OpenAI_API
 			var res = JsonConvert.DeserializeObject<T>(resultAsString);
 			try
 			{
-				res.Organization = response.Headers.GetValues("Openai-Organization").FirstOrDefault();
-				res.RequestId = response.Headers.GetValues("X-Request-ID").FirstOrDefault();
-				res.ProcessingTime = TimeSpan.FromMilliseconds(int.Parse(response.Headers.GetValues("Openai-Processing-Ms").First()));
-				res.OpenaiVersion = response.Headers.GetValues("Openai-Version").FirstOrDefault();
-				if (string.IsNullOrEmpty(res.Model))
-					res.Model = response.Headers.GetValues("Openai-Model").FirstOrDefault();
+				//res.Organization = response.Headers.GetValues("Openai-Organization").FirstOrDefault();
+				//res.RequestId = response.Headers.GetValues("X-Request-ID").FirstOrDefault();
+				//res.ProcessingTime = TimeSpan.FromMilliseconds(int.Parse(response.Headers.GetValues("Openai-Processing-Ms").First()));
+				//res.OpenaiVersion = response.Headers.GetValues("Openai-Version").FirstOrDefault();
+				//if (string.IsNullOrEmpty(res.Model))
+				//	res.Model = response.Headers.GetValues("Openai-Model").FirstOrDefault();
 			}
 			catch (Exception e)
 			{
@@ -368,9 +371,9 @@ namespace OpenAI_API
 		/// <param name="postData">(optional) A json-serializable object to include in the request body.</param>
 		/// <returns>The HttpResponseMessage of the response, which is confirmed to be successful.</returns>
 		/// <exception cref="HttpRequestException">Throws an exception if a non-success HTTP response was returned</exception>
-		protected async IAsyncEnumerable<T> HttpStreamingRequest<T>(string url = null, HttpMethod verb = null, object postData = null) where T : ApiResultBase
+		protected async IAsyncEnumerable<T> HttpStreamingRequest<T>(string url = null, HttpMethod verb = null, object postData = null, CancellationToken cancellationToken = default) where T : ApiResultBase
 		{
-			var response = await HttpRequestRaw(url, verb, postData, true);
+			var response = await HttpRequestRaw(url, verb, postData, true, cancellationToken = cancellationToken);
 					   
 			string organization = null;
 			string requestId = null;
@@ -380,11 +383,11 @@ namespace OpenAI_API
 
 			try
 			{
-				organization = response.Headers.GetValues("Openai-Organization").FirstOrDefault();
-				requestId = response.Headers.GetValues("X-Request-ID").FirstOrDefault();
-				processingTime = TimeSpan.FromMilliseconds(int.Parse(response.Headers.GetValues("Openai-Processing-Ms").First()));
-				openaiVersion = response.Headers.GetValues("Openai-Version").FirstOrDefault();
-				modelFromHeaders = response.Headers.GetValues("Openai-Model").FirstOrDefault();
+				//organization = response.Headers.GetValues("Openai-Organization").FirstOrDefault();
+				//requestId = response.Headers.GetValues("X-Request-ID").FirstOrDefault();
+				//processingTime = TimeSpan.FromMilliseconds(int.Parse(response.Headers.GetValues("Openai-Processing-Ms").First()));
+				//openaiVersion = response.Headers.GetValues("Openai-Version").FirstOrDefault();
+				//modelFromHeaders = response.Headers.GetValues("Openai-Model").FirstOrDefault();
 			}
 			catch (Exception e)
 			{
@@ -393,12 +396,15 @@ namespace OpenAI_API
 
 			string resultAsString = "";
 
-			using (var stream = await response.Content.ReadAsStreamAsync())
+			using (var stream = await response.Content.ReadAsStreamAsync(cancellationToken))
 			using (StreamReader reader = new StreamReader(stream))
 			{
 				string line;
 				while ((line = await reader.ReadLineAsync()) != null)
 				{
+					if (cancellationToken.IsCancellationRequested) {
+						break;
+					}
 					resultAsString += line + Environment.NewLine;
 
 					if (line.StartsWith("data:"))

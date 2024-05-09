@@ -243,7 +243,7 @@ namespace OpenAI_API.Chat
 		/// If you are not using C# 8 supporting async enumerables or if you are using the .NET Framework, you may need to use <see cref="StreamResponseFromChatbotAsync(Action{string})"/> instead.
 		/// </summary>
 		/// <returns>An async enumerable with each of the results as they come in.  See <see href="https://docs.microsoft.com/en-us/dotnet/csharp/whats-new/csharp-8#asynchronous-streams"/> for more details on how to consume an async enumerable.</returns>
-		public async IAsyncEnumerable<string> StreamResponseEnumerableFromChatbotAsync()
+		public async IAsyncEnumerable<string> StreamResponseEnumerableFromChatbotAsync(CancellationToken cancelationToken = default)
 		{
 			ChatRequest req = null;
 
@@ -262,8 +262,8 @@ namespace OpenAI_API.Chat
 				req.Messages = _Messages.ToList();
 				try
 				{
-					resStream = _endpoint.StreamChatEnumerableAsync(req);
-					enumerator = resStream.GetAsyncEnumerator();
+					resStream = _endpoint.StreamChatEnumerableAsync(req, cancelationToken);
+					enumerator = resStream.GetAsyncEnumerator(cancelationToken);
 					await enumerator.MoveNextAsync();
 					firstStreamedResult = enumerator.Current;
 				}
@@ -324,26 +324,25 @@ namespace OpenAI_API.Chat
 				throw new Exception("The chat result stream is null, but it shouldn't be");
 			}
 
-			do
-			{
-				ChatResult res = enumerator.Current;
-				if (res.Choices.FirstOrDefault()?.Delta is ChatMessage delta)
-				{
-					if (delta.Role != null)
-						responseRole = delta.Role;
+			if (enumerator?.Current != null) {
+        do {
+          ChatResult res = enumerator.Current;
+          if (res.Choices.FirstOrDefault()?.Delta is ChatMessage delta) {
+            if (responseRole == null && delta.Role != null)
+              responseRole = delta.Role;
+            responseRole = ChatMessageRole.Assistant;
+            string deltaTextContent = delta.TextContent;
 
-					string deltaTextContent = delta.TextContent;
+            if (!string.IsNullOrEmpty(deltaTextContent)) {
+              responseStringBuilder.Append(deltaTextContent);
+              yield return deltaTextContent;
+            }
+          }
+          MostRecentApiResult = res;
+        } while (await enumerator.MoveNextAsync());
+      }
 
-					if (!string.IsNullOrEmpty(deltaTextContent))
-					{
-						responseStringBuilder.Append(deltaTextContent);
-						yield return deltaTextContent;
-					}
-				}
-				MostRecentApiResult = res;
-			} while (await enumerator.MoveNextAsync());
-			
-			if (responseRole != null)
+      if (responseRole != null)
 			{
 				AppendMessage(responseRole, responseStringBuilder.ToString());
 			}
