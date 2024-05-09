@@ -64,11 +64,11 @@ namespace OpenAI_API.Chat
 			}
 		}
 
-		/// <summary>
-		/// The text content of the message.
-		/// </summary>
-		[JsonIgnore]
-		public string TextContent { get; set; }
+    /// <summary>
+    /// The text content of the message.
+    /// </summary>
+    [JsonProperty("content")]
+    public string TextContent { get; set; }
 
 		/// <summary>
 		/// To support multi-modal messages, this property has been renamed to <see cref="TextContent"/>.  Please use that instead."/>
@@ -80,8 +80,9 @@ namespace OpenAI_API.Chat
 		/// <summary>
 		/// This is only used for serializing the request into JSON, do not use it directly.
 		/// </summary>
-		[JsonProperty("content")]
-		[JsonConverter(typeof(ContentDataConverter))]
+		/// 
+		[JsonIgnore]
+		//[JsonConverter(typeof(ContentDataConverter))]
 		internal IList<ContentItem> ContentItems
 		{
 			get
