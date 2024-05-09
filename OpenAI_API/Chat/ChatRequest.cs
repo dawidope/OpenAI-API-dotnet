@@ -51,11 +51,13 @@ namespace OpenAI_API.Chat
 		/// </summary>
 		[JsonProperty("stream")]
 		public bool Stream { get; internal set; } = false;
+    [JsonProperty("cache_prompt")]
+    public bool CachePrompt { get; internal set; } = true;
 
-		/// <summary>
-		/// This is only used for serializing the request into JSON, do not use it directly.
-		/// </summary>
-		[JsonProperty("stop")]
+    /// <summary>
+    /// This is only used for serializing the request into JSON, do not use it directly.
+    /// </summary>
+    [JsonProperty("stop")]
 		internal object CompiledStop
 		{
 			get
